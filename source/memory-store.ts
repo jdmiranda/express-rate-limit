@@ -100,9 +100,23 @@ export class MemoryStore implements Store {
 	 * @public
 	 */
 	async increment(key: string): Promise<ClientRateLimitInfo> {
-		const client = this.getClient(key)
-
+		// Cache timestamp to avoid multiple Date.now() calls
 		const now = Date.now()
+
+		// Fast path: check if client exists in current map
+		let client = this.current.get(key)
+		if (client) {
+			// Client already in current map, check if needs reset
+			if (client.resetTime.getTime() <= now) {
+				this.resetClient(client, now)
+			}
+			client.totalHits++
+			return client
+		}
+
+		// Slower path: get or create client
+		client = this.getClient(key)
+
 		if (client.resetTime.getTime() <= now) {
 			this.resetClient(client, now)
 		}

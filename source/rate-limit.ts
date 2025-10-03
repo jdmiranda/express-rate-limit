@@ -197,19 +197,30 @@ const parseOptions = (passedOptions: Partial<Options>): Configuration => {
 		statusCode: 429,
 		legacyHeaders: passedOptions.headers ?? true,
 		identifier(request: Request, _response: Response): string {
-			let duration = ''
 			const property = config.requestPropertyName
-
 			const { limit } = (request as AugmentedRequest)[property]
-			const seconds = config.windowMs / 1000
-			const minutes = config.windowMs / (1000 * 60)
-			const hours = config.windowMs / (1000 * 60 * 60)
-			const days = config.windowMs / (1000 * 60 * 60 * 24)
 
-			if (seconds < 60) duration = `${seconds}sec`
-			else if (minutes < 60) duration = `${minutes}min`
-			else if (hours < 24) duration = `${hours}hr${hours > 1 ? 's' : ''}`
-			else duration = `${days}day${days > 1 ? 's' : ''}`
+			// Pre-calculate time conversions to avoid repeated division
+			const ms = config.windowMs
+			const seconds = ms / 1000
+
+			let duration: string
+			if (seconds < 60) {
+				duration = `${seconds}sec`
+			} else {
+				const minutes = ms / 60000
+				if (minutes < 60) {
+					duration = `${minutes}min`
+				} else {
+					const hours = ms / 3600000
+					if (hours < 24) {
+						duration = `${hours}hr${hours > 1 ? 's' : ''}`
+					} else {
+						const days = ms / 86400000
+						duration = `${days}day${days > 1 ? 's' : ''}`
+					}
+				}
+			}
 
 			return `${limit}-in-${duration}`
 		},

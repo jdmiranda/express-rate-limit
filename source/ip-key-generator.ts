@@ -1,6 +1,10 @@
 import { isIPv6 } from 'node:net'
 import { Address6 } from 'ip-address'
 
+// Cache for IPv6 subnet calculations to avoid repeated parsing
+const ipv6Cache = new Map<string, string>()
+const MAX_CACHE_SIZE = 10000
+
 /**
  * Returns the IP address itself for IPv4, or a CIDR-notation subnet for IPv6.
  *
@@ -17,11 +21,30 @@ import { Address6 } from 'ip-address'
  * @public
  */
 export function ipKeyGenerator(ip: string, ipv6Subnet: number | false = 56) {
-	if (ipv6Subnet && isIPv6(ip)) {
-		// For IPv6, return the network address of the subnet in CIDR format
-		return `${new Address6(`${ip}/${ipv6Subnet}`).startAddress().correctForm()}/${ipv6Subnet}`
+	// Fast path: IPv4 or no subnet
+	if (!ipv6Subnet || !isIPv6(ip)) {
+		return ip
 	}
 
-	// For IPv4, just return the IP address itself
-	return ip
+	// For IPv6, check cache first
+	const cacheKey = `${ip}/${ipv6Subnet}`
+	const cached = ipv6Cache.get(cacheKey)
+	if (cached !== undefined) {
+		return cached
+	}
+
+	// Cache miss: calculate and store
+	const result = `${new Address6(cacheKey).startAddress().correctForm()}/${ipv6Subnet}`
+
+	// Prevent cache from growing unbounded
+	if (ipv6Cache.size >= MAX_CACHE_SIZE) {
+		// Remove oldest entry (first key in Map)
+		const firstKey = ipv6Cache.keys().next().value
+		if (firstKey !== undefined) {
+			ipv6Cache.delete(firstKey)
+		}
+	}
+
+	ipv6Cache.set(cacheKey, result)
+	return result
 }
